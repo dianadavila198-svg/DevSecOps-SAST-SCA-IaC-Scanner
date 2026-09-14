@@ -1,0 +1,56 @@
+#Runs the security scanner automatically on every pull request into main
+name: Security scanner
+
+#Trigger: only runs when a PR is opened/updated, targeting the main branch
+on:
+  pull_request:
+    branches: [main]
+
+#Lets this workflow post PR comments 
+permissions:
+  pull-requests: write
+  contents: read
+
+
+jobs:
+  scan:
+   runs-on: ubuntu-latest #GitHub's own Linux virtual machine, fresh each run 
+   steps:
+    # Step 1: download a copy of the repo's code onto the runner
+    - uses: actions/checkout@v4
+
+    # Step 2: install Python on the runner (matches my local version)
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    # Step 3: install the scanner's dependencies
+    - run: pip install requests python-dotenv
+
+    # Step 4: install checkov (IaC pillar) — separate from Step 3 since it's only needed for the IaC scan
+    - name: Install checkov
+      run: pip install checkov
+
+    # Step 5: the actual execution of the scanner (same as running it locally)
+    - name: Run security scanner
+      working-directory: Security_Scanner_SAST_IaC_SCA_LLM
+      env:
+        # .yml syntax for pulling in the API key without even being written anywhere in this file
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY}} # from GitHub Secrets, not .env (API key)
+      run: python -u demo.py
+
+      # Step 6: read the scan_report.md that demo.py just created
+      # and post its contents as a comment directly in the PR 
+    - name: Post results as PR comment 
+      uses: actions/github-script@v7
+      with:
+        script: |
+           const fs = require('fs');
+           const report = fs.readFileSync('Security_Scanner_SAST_IaC_SCA_LLM/scan_report.md', 'utf8');
+           github.rest.issues.createComment({
+             owner: context.repo.owner,
+             repo: context.repo.repo,
+             issue_number: context.issue.number, 
+             body: report
+             });
+

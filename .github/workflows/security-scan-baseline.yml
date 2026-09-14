@@ -1,0 +1,74 @@
+name: Security Scanner - Full Repository Baseline
+
+# Scans the ENTIRE repository on demand - covers code written before the
+# scanner existed, which the PR-triggered workflow would never catch on
+# its own (that one only sees files touched in a given PR).
+
+
+#Trigger; manual button in the Actions tab, plus an optional weekly run
+on:
+  workflow_dispatch: # adds a "Run workflow" button on GitHub
+  schedule:
+    - cron: "0 6 * * 1" # also runs automatically every Monday, 6am UTC
+
+# Lets this workflow create/update a GitHub Issue (instead of a PR comment)
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  baseline-scan:
+    runs-on: ubuntu-latest 
+
+    steps:
+      # Same first four steps as the PR workflow 
+     - uses: actions/checkout@v4
+
+     - uses: actions/setup-python@v5
+       with:
+         python-version: "3.12"
+
+     - run: pip install requests python-dotenv
+
+     - name: Run security scanner
+       working-directory: Security_Scanner_SAST_IaC_SCA_LLM
+       env:
+        # .yml syntax for pulling in the API key without even being written anywhere in this file
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY}} # from GitHub Secrets, not .env (API key)
+       run: python demo.py
+
+    # Find an existing baseline issue, so re-runs UPDATE it instead of 
+    # creating a new one every time (keeps one single source of truth)
+     - name: Find existing baseline issue
+       id: find_issue
+       uses: actions/github-script@v7
+       with:
+         script: |
+           const issues = await github.rest.issues.listForRepo({
+             owner: context.repo.owner, repo: context.repo.repo, 
+             state: 'open', labels: 'security-baseline'
+           });
+           return issues.data.length ? issues.data[0].number : null;
+  
+     # Post a NEW issue the first time, or UPDATE the same one every run after
+     - name: Post or update the baseline report #name of the action within the workflow
+       uses: actions/github-script@v7
+       with:
+         script: |
+           const fs = require('fs');
+           const report = fs.readFileSync('Security_Scanner_SAST_IaC_SCA_LLM/scan_report.md', 'utf8');
+           const body = `## Full Repository Security Baseline\nLast run: ${new Date().toISOString()}\n\n${report}`;
+           const existing = ${{ steps.find_issue.outputs.result }};
+           if (existing) {
+             const commentBody = `**Run: ${new Date().toISOString()}**\n\n${report}`;
+             await github.rest.issues.createComment({
+               owner: context.repo.owner, repo: context.repo.repo, 
+               issue_number: existing, body: commentBody
+              });
+           } else {
+            await github.rest.issues.create ({
+              owner: context.repo.owner, repo: context.repo.repo, 
+              title: "Security Scan — Full Repository Baseline",
+              body, labels: ['security-baseline']
+            });
+            }
