@@ -1,6 +1,5 @@
-# Academic Context:
-
-Developed as part of the MSc Information Technology with Cybersecurity dissertation project at the University of Aberdeen (UK, 2026)
+# Context:
+Developed for the MSc Information Technology with Cybersecurity dissertation at the University of Aberdeen (UK, 2026). This ASPM pipeline was engineered specifically to analyze and secure the [UoA Sensory Map](https://github.com/dianadavila198-svg/UoASensoryMap), a full-stack Django REST web application.
 
 # Embedded Security Scanner
 
